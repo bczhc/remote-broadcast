@@ -5,11 +5,14 @@ use clap::Parser;
 use log::{debug, info};
 
 use server::cli::Args;
-use server::setup_logger;
+use server::protocol::{
+    DeviceId, Message, PingResult, ReceiverCommand, SenderCommand, ServerRequest, ServerResponse,
+};
+use server::{setup_logger, RwBincode, RECEIVERS};
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    setup_logger(args.log_level)?;
+    setup_logger(args.log_level.log_level)?;
 
     debug!("Args: {:?}", args);
 
@@ -26,6 +29,48 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn handle_stream(stream: TcpStream) -> anyhow::Result<()> {
+fn handle_stream(mut stream: TcpStream) -> anyhow::Result<()> {
+    let message = stream.read_bincode::<Message>()?;
+
+    debug!("Message: {:?}", message);
+
+    match message {
+        Message::Sender(c) => match c {
+            SenderCommand::Ping(id) => {
+                let mut guard = RECEIVERS.lock().unwrap();
+                match guard.get_mut(&id) {
+                    None => {
+                        stream.write_bincode(ServerResponse::Ping(PingResult::Offline))?;
+                    }
+                    Some(receiver) => {
+                        receiver.write_bincode(ServerRequest::Ping(id))?;
+                        if let Message::Receiver(ReceiverCommand::Pong(id)) =
+                            receiver.read_bincode::<Message>()?
+                        {
+                            stream.write_bincode(ServerResponse::Ping(PingResult::Pong(id)))?;
+                        } else {
+                            stream.write_bincode(ServerResponse::Ping(
+                                PingResult::UnexpectedResult,
+                            ))?;
+                        }
+                    }
+                }
+            }
+        },
+        Message::Receiver(c) => match c {
+            ReceiverCommand::Connect(id) => {
+                info!("Connected: {}", id);
+                stream.write_bincode(ServerResponse::Connected)?;
+                let mut guard = RECEIVERS.lock().unwrap();
+                guard.insert(id, stream);
+                let ids = guard.keys().map(DeviceId::to_string).collect::<Vec<_>>();
+                debug!("Current receivers: {:?}", ids);
+            }
+            ReceiverCommand::Pong(x) => {
+                stream.write_bincode(ServerResponse::Ping(PingResult::Pong(x)))?;
+            }
+        },
+    }
+
     Ok(())
 }

@@ -1,0 +1,18 @@
+[package]
+name = "receiver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+qr2term = "0.3.1"
+log = "0.4.20"
+uuid = { version = "1.5.0", features = ["v4"] }
+serde = { version = "1.0.192", features = ["derive"] }
+serde_json = "1.0.108"
+dirs = "5.0.1"
+once_cell = "1.18.0"
+anyhow = "1.0.75"
+server = { path = "../server" }
+clap = "4.4.8"
+bincode = "2.0.0-rc.3"
+byteorder = "1.5.0"

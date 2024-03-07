@@ -1,1 +1,6 @@
-workspace = { members = ["client", "end", "server"] }
+[workspace]
+members = [
+    "server",
+    "sender",
+    "receiver",
+]
