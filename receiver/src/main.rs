@@ -53,12 +53,13 @@ fn connect_to_server(id: &str, addr: &str) -> anyhow::Result<()> {
         return Err(anyhow!("Failed to connect to the server"));
     }
 
-    match stream.read_bincode::<ServerRequest>()? {
-        ServerRequest::Ping(x) => {
-            debug!("Get ping: {:?}", x);
-            stream.write_bincode(Message::Receiver(ReceiverCommand::Pong(x)))?;
+    // after connecting to the server, wait for the directives
+    loop {
+        match stream.read_bincode::<ServerRequest>()? {
+            ServerRequest::Ping(x) => {
+                debug!("Get ping: {:?}", x);
+                stream.write_bincode(Message::Receiver(ReceiverCommand::Pong(x)))?;
+            }
         }
     }
-
-    Ok(())
 }
