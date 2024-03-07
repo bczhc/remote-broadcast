@@ -20,6 +20,7 @@ pub enum PingResult {
     Pong(DeviceId),
     Offline,
     UnexpectedResult,
+    Failed,
 }
 
 #[derive(Encode, Decode, Debug, Eq, PartialEq)]

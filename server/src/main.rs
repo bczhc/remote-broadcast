@@ -43,15 +43,25 @@ fn handle_stream(mut stream: TcpStream) -> anyhow::Result<()> {
                         stream.write_bincode(ServerResponse::Ping(PingResult::Offline))?;
                     }
                     Some(receiver) => {
-                        receiver.write_bincode(ServerRequest::Ping(id))?;
-                        if let Message::Receiver(ReceiverCommand::Pong(id)) =
-                            receiver.read_bincode::<Message>()?
-                        {
-                            stream.write_bincode(ServerResponse::Ping(PingResult::Pong(id)))?;
+                        if receiver.write_bincode(ServerRequest::Ping(id)).is_ok() {
+                            match receiver.read_bincode::<Message>() {
+                                Ok(Message::Receiver(ReceiverCommand::Pong(id))) => {
+                                    stream.write_bincode(ServerResponse::Ping(
+                                        PingResult::Pong(id),
+                                    ))?;
+                                }
+                                Err(_) => {
+                                    stream
+                                        .write_bincode(ServerResponse::Ping(PingResult::Failed))?;
+                                }
+                                _ => {
+                                    stream.write_bincode(ServerResponse::Ping(
+                                        PingResult::UnexpectedResult,
+                                    ))?;
+                                }
+                            }
                         } else {
-                            stream.write_bincode(ServerResponse::Ping(
-                                PingResult::UnexpectedResult,
-                            ))?;
+                            stream.write_bincode(ServerResponse::Ping(PingResult::Failed))?;
                         }
                     }
                 }
