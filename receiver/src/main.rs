@@ -6,7 +6,7 @@ use clap::Parser;
 use log::{debug, info};
 
 use receiver::cli::Args;
-use receiver::{read_config, write_config};
+use receiver::{read_local_config, user_config, write_local_config};
 use server::protocol::{Message, ReceiverCommand, ServerRequest, ServerResponse};
 use server::RwBincode;
 
@@ -14,16 +14,16 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     server::setup_logger(args.log_level.log_level)?;
-    let mut config = read_config()?;
+    let mut local_config = read_local_config()?;
     debug!("Args: {:?}", args);
-    debug!("Config: {:?}", config);
+    debug!("Local config: {:?}", local_config);
 
-    let id = match config.id {
+    let id = match local_config.id {
         None => {
             println!("This is the first run. An ID will be generated");
             let id = uuid::Uuid::new_v4().to_string();
-            config.id = Some(id.clone());
-            write_config(&config)?;
+            local_config.id = Some(id.clone());
+            write_local_config(&local_config)?;
             id
         }
         Some(a) => a,
@@ -34,11 +34,14 @@ fn main() -> anyhow::Result<()> {
         id
     );
     qr2term::print_qr(&id)?;
-    config.id = Some(id.clone());
-    write_config(&config)?;
+    local_config.id = Some(id.clone());
+    write_local_config(&local_config)?;
+
+    let user_config = user_config(args.config_file.config_file)?;
+    debug!("User config: {:?}", user_config);
 
     info!("Connecting to the server...");
-    connect_to_server(&id, &args.server_addr)?;
+    connect_to_server(&id, &user_config.server.addr)?;
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 #[derive(clap::Parser, Debug)]
 pub struct Args {
     #[arg(short = 'p', long, default_value = "7000")]
@@ -15,4 +17,10 @@ pub struct LogLevelArg {
         default_value = "debug"
     )]
     pub log_level: log::LevelFilter,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct ConfigFile {
+    #[arg(short, long = "config", help = "Config file", default_value = "config.toml")]
+    pub config_file: PathBuf,
 }
