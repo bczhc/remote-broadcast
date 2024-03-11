@@ -3,39 +3,43 @@ use bincode::{Decode, Encode};
 pub type DeviceId = String;
 
 #[derive(Encode, Decode, Debug, Eq, PartialEq)]
-pub enum SenderCommand {
-    /// Check if the specified receiver is online.
-    Ping(DeviceId),
+pub enum SenderType {
+    Redirect,
 }
 
 #[derive(Encode, Decode, Debug, Eq, PartialEq)]
-pub enum ReceiverCommand {
+pub struct SenderMessage {
+    pub target: DeviceId,
+    pub r#type: SenderType,
+    pub command: SenderCommand,
+}
+
+#[derive(Encode, Decode, Debug, Eq, PartialEq)]
+pub enum SenderCommand {
+    /// Check if the receiver is online.
+    Ping(String /* payload */),
+}
+
+#[derive(Encode, Decode, Debug, Eq, PartialEq)]
+pub enum ReceiverMessage {
     /// Connect to the server.
     Connect(DeviceId),
-    Pong(DeviceId),
-}
-
-#[derive(Encode, Decode, Debug, Eq, PartialEq)]
-pub enum PingResult {
-    Pong(DeviceId),
-    Offline,
-    UnexpectedResult,
-    Failed,
-}
-
-#[derive(Encode, Decode, Debug, Eq, PartialEq)]
-pub enum ServerResponse {
-    Ping(PingResult),
-    Connected,
-}
-
-#[derive(Encode, Decode, Debug, Eq, PartialEq)]
-pub enum ServerRequest {
-    Ping(DeviceId),
 }
 
 #[derive(Encode, Decode, Debug, Eq, PartialEq)]
 pub enum Message {
-    Sender(SenderCommand),
-    Receiver(ReceiverCommand),
+    Sender(SenderMessage),
+    Receiver(ReceiverMessage),
+}
+
+#[derive(Encode, Decode, Debug, Eq, PartialEq)]
+pub enum ReceiverResponse {
+    Pong(String),
+}
+
+#[derive(Encode, Decode, Debug, Eq, PartialEq)]
+pub enum ServerResponse {
+    Connected,
+    DeviceOffline,
+    Response(ReceiverResponse),
 }

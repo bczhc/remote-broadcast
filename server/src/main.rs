@@ -5,9 +5,7 @@ use clap::Parser;
 use log::{debug, info};
 
 use server::cli::Args;
-use server::protocol::{
-    DeviceId, Message, PingResult, ReceiverCommand, SenderCommand, ServerRequest, ServerResponse,
-};
+use server::protocol::{Message, ReceiverMessage, ReceiverResponse, SenderType, ServerResponse};
 use server::{setup_logger, RwBincode, RECEIVERS};
 
 fn main() -> anyhow::Result<()> {
@@ -35,49 +33,26 @@ fn handle_stream(mut stream: TcpStream) -> anyhow::Result<()> {
     debug!("Message: {:?}", message);
 
     match message {
-        Message::Sender(c) => match c {
-            SenderCommand::Ping(id) => {
-                let mut guard = RECEIVERS.lock().unwrap();
-                match guard.get_mut(&id) {
-                    None => {
-                        stream.write_bincode(ServerResponse::Ping(PingResult::Offline))?;
-                    }
-                    Some(receiver) => {
-                        if receiver.write_bincode(ServerRequest::Ping(id)).is_ok() {
-                            match receiver.read_bincode::<Message>() {
-                                Ok(Message::Receiver(ReceiverCommand::Pong(id))) => {
-                                    stream.write_bincode(ServerResponse::Ping(
-                                        PingResult::Pong(id),
-                                    ))?;
-                                }
-                                Err(_) => {
-                                    stream
-                                        .write_bincode(ServerResponse::Ping(PingResult::Failed))?;
-                                }
-                                _ => {
-                                    stream.write_bincode(ServerResponse::Ping(
-                                        PingResult::UnexpectedResult,
-                                    ))?;
-                                }
-                            }
-                        } else {
-                            stream.write_bincode(ServerResponse::Ping(PingResult::Failed))?;
-                        }
-                    }
+        Message::Sender(m) => {
+            assert_eq!(m.r#type, SenderType::Redirect);
+
+            let target = &m.target;
+            match RECEIVERS.lock().unwrap().get_mut(target) {
+                None => {
+                    stream.write_bincode(ServerResponse::DeviceOffline)?;
+                }
+                Some(s) => {
+                    // redirect
+                    s.write_bincode(&m.command)?;
+                    let r = s.read_bincode::<ReceiverResponse>()?;
+                    stream.write_bincode(ServerResponse::Response(r))?;
                 }
             }
-        },
-        Message::Receiver(c) => match c {
-            ReceiverCommand::Connect(id) => {
-                info!("Connected: {}", id);
+        }
+        Message::Receiver(m) => match m {
+            ReceiverMessage::Connect(x) => {
                 stream.write_bincode(ServerResponse::Connected)?;
-                let mut guard = RECEIVERS.lock().unwrap();
-                guard.insert(id, stream);
-                let ids = guard.keys().map(DeviceId::to_string).collect::<Vec<_>>();
-                debug!("Current receivers: {:?}", ids);
-            }
-            ReceiverCommand::Pong(x) => {
-                stream.write_bincode(ServerResponse::Ping(PingResult::Pong(x)))?;
+                RECEIVERS.lock().unwrap().insert(x, stream);
             }
         },
     }

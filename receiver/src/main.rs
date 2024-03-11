@@ -7,7 +7,7 @@ use log::{debug, info};
 
 use receiver::cli::Args;
 use receiver::{read_local_config, user_config, write_local_config};
-use server::protocol::{Message, ReceiverCommand, ServerRequest, ServerResponse};
+use server::protocol::{Message, ReceiverMessage, ReceiverResponse, SenderCommand, ServerResponse};
 use server::RwBincode;
 
 fn main() -> anyhow::Result<()> {
@@ -49,19 +49,19 @@ fn main() -> anyhow::Result<()> {
 fn connect_to_server(id: &str, addr: &str) -> anyhow::Result<()> {
     let mut stream = TcpStream::connect(SocketAddr::from_str(addr)?)?;
 
-    stream.write_bincode(Message::Receiver(ReceiverCommand::Connect(id.into())))?;
-    if stream.read_bincode::<ServerResponse>()? == ServerResponse::Connected {
-        info!("Connected");
-    } else {
+    stream.write_bincode(Message::Receiver(ReceiverMessage::Connect(id.into())))?;
+
+    let response = stream.read_bincode::<ServerResponse>()?;
+    if response != ServerResponse::Connected {
         return Err(anyhow!("Failed to connect to the server"));
     }
 
-    // after connecting to the server, wait for the directives
+    // loop and wait for the orders
     loop {
-        match stream.read_bincode::<ServerRequest>()? {
-            ServerRequest::Ping(x) => {
-                debug!("Get ping: {:?}", x);
-                stream.write_bincode(Message::Receiver(ReceiverCommand::Pong(x)))?;
+        let command = stream.read_bincode::<SenderCommand>()?;
+        match command {
+            SenderCommand::Ping(x) => {
+                stream.write_bincode(ReceiverResponse::Pong(x))?;
             }
         }
     }
